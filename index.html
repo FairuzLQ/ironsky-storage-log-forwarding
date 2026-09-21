@@ -200,7 +200,8 @@ gunzip -c /opt/ironsky/raw/2026/09/*.json.gz \
   | python3 normalize.py &gt;&gt; /opt/ironsky/out/events.jsonl
 <span class="cmt"># .tar.gz (arsip lama) -> keluarkan anggota ke stdout</span>
 <span class="cmt"># tar -xzOf /opt/ironsky/raw/2026/01/2026-01-25-event.tar.gz | python3 normalize.py &gt;&gt; /opt/ironsky/out/events.jsonl</span></pre></div>
-      <div class="codeblock"><div class="cbar"><span class="fname">normalize.py</span><button class="copy">Copy</button></div><pre>import sys, json, re
+      <p>Skrip normalisasi, simpan sebagai <code>/opt/ironsky/normalize.py</code> (dipakai juga oleh <code>pull.sh</code> pada langkah 6):</p>
+      <div class="codeblock"><div class="cbar"><span class="fname">/opt/ironsky/normalize.py</span><button class="copy">Copy</button></div><pre>import sys, json, re
 for line in sys.stdin:
     line = line.strip()
     if not line: continue

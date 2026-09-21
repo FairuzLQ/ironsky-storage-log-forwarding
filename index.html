@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>IronSKY — SIEM Integration via Storage-based Log Forwarding</title>
-<meta name="description" content="Metode integrasi IronSKY dengan SIEM melalui storage-based log forwarding (Amazon S3)." />
+<meta name="description" content="Integrating IronSKY with your SIEM through storage-based log forwarding (Amazon S3)." />
 <style>
   :root{--bg:#0d1117;--bg-soft:#161b22;--border:#2a3140;--text:#e6edf3;--muted:#9aa7b6;
     --accent:#4f9cff;--accent-2:#7c5cff;--green:#3fb950;--amber:#d29922;--red:#f85149;--code-bg:#0b0f16;--radius:14px;--maxw:1200px;}
@@ -55,20 +55,20 @@
   <aside class="sidebar">
     <div class="brand"><div class="logo">IS</div><div><b>IronSKY × SIEM</b><span>Storage-based Log Forwarding</span></div></div>
     <nav class="nav">
-      <a href="#ringkasan">Ringkasan</a>
-      <a href="#arsitektur">Arsitektur Alur</a>
-      <a href="#konten">Konten Log</a>
-      <a href="#akses">Akses dari SecIron</a>
-      <a href="#format">Format &amp; Struktur Data</a>
-      <div class="lbl">Integrasi di Sisi SIEM</div>
-      <a href="#s1">1. Kredensial</a>
-      <a href="#s2">2. AWS CLI &amp; Tes Akses</a>
-      <a href="#s3">3. Pull Log (sync)</a>
-      <a href="#s4">4. Ekstrak &amp; Rapikan</a>
-      <a href="#s5">5. Alirkan ke SIEM</a>
-      <a href="#s6">6. Penjadwalan</a>
-      <div class="lbl">Lain-lain</div>
-      <a href="#verifikasi">Verifikasi</a>
+      <a href="#overview">Overview</a>
+      <a href="#architecture">Integration Flow</a>
+      <a href="#content">Log Content</a>
+      <a href="#access">Access from SecIron</a>
+      <a href="#format">Data Format &amp; Structure</a>
+      <div class="lbl">SIEM-Side Integration</div>
+      <a href="#s1">1. Credentials</a>
+      <a href="#s2">2. AWS CLI &amp; Access Test</a>
+      <a href="#s3">3. Pull Logs (sync)</a>
+      <a href="#s4">4. Extract &amp; Normalize</a>
+      <a href="#s5">5. Forward to SIEM</a>
+      <a href="#s6">6. Scheduling</a>
+      <div class="lbl">Reference</div>
+      <a href="#verification">Verification</a>
       <a href="#troubleshoot">Troubleshooting</a>
     </nav>
   </aside>
@@ -76,22 +76,22 @@
   <main class="content">
     <div class="hero">
       <h1>SIEM Integration via Storage-based Log Forwarding</h1>
-      <p>Integrasi IronSKY dengan sistem SIEM perusahaan untuk monitoring dan korelasi insiden keamanan. IronSKY mengirimkan log aktivitas keamanan ke storage bucket secara otomatis, dan SIEM melakukan pulling secara periodik.</p>
+      <p>Integrate IronSKY with your enterprise SIEM for security-incident monitoring and correlation. IronSKY automatically ships security-activity logs to a storage bucket, and the SIEM pulls them periodically.</p>
       <div>
-        <span class="pill">Metode: S3 log forwarding</span>
+        <span class="pill">Method: S3 log forwarding</span>
         <span class="pill">Region: ap-southeast-3 (Jakarta)</span>
-        <span class="pill">Latensi: H+1</span>
+        <span class="pill">Latency: next-day (T+1)</span>
       </div>
     </div>
 
-    <section id="ringkasan">
-      <h2>Ringkasan</h2>
-      <p>Dengan metode ini, aktivitas anomali dan potensi ancaman dari sisi aplikasi mobile dapat terpantau terpusat di dashboard SIEM, serta dianalisis dan dikorelasikan bersama sumber log lain di perusahaan.</p>
-      <p>Metode ini mendukung arsitektur <b>storage-based log forwarding</b> yang fleksibel dan kompatibel dengan berbagai platform SIEM (Splunk, IBM QRadar, ArcSight, Wazuh, dan lainnya). Karena mekanisme pengiriman berbasis storage, terdapat jeda ketersediaan data sebesar <b>H+1</b>: log aktivitas dari tanggal tertentu baru tersedia untuk di-pull pada hari berikutnya.</p>
+    <section id="overview">
+      <h2>Overview</h2>
+      <p>With this method, anomalies and potential threats from the mobile-app side can be monitored centrally in your SIEM dashboard, then analyzed and correlated alongside other enterprise log sources.</p>
+      <p>It uses a flexible <b>storage-based log-forwarding</b> architecture that is compatible with a wide range of SIEM platforms (Splunk, IBM QRadar, ArcSight, Wazuh, and others). Because delivery is storage-based, there is a <b>next-day (T+1)</b> availability gap: a given day's activity logs become available to pull the following day.</p>
     </section>
 
-    <section id="arsitektur">
-      <h2>Arsitektur Alur Integrasi</h2>
+    <section id="architecture">
+      <h2>Integration Flow</h2>
       <div class="diagram"><pre>
    Mobile Application + IronSKY SDK
             │  Security Events (real-time)
@@ -102,48 +102,48 @@
    S3-compatible Bucket (AWS S3, region ap-southeast-3)
             │  Scheduled pulling / S3 connector
             ▼
-   SIEM Platform  (Splunk / IBM QRadar / ArcSight / Wazuh / dll.)
+   SIEM Platform  (Splunk / IBM QRadar / ArcSight / Wazuh / etc.)
 </pre></div>
-      <p>Aplikasi mobile yang terpasang IronSKY SDK melaporkan event ke IronSKY Server. IronSKY meng-export log secara berkala ke bucket S3. Di sisi Anda, SIEM (atau host forwarder) menarik log dari bucket tersebut, lalu memprosesnya menjadi alert.</p>
+      <p>Mobile apps running the IronSKY SDK report events to the IronSKY Server. IronSKY periodically exports logs to the S3 bucket. On your side, the SIEM (or a forwarder host) pulls logs from the bucket and processes them into alerts.</p>
     </section>
 
-    <section id="konten">
-      <h2>Konten Log yang Dikirimkan</h2>
-      <p>Log mencakup event keamanan yang terdeteksi oleh IronSKY, dengan metadata berikut:</p>
+    <section id="content">
+      <h2>Log Content</h2>
+      <p>Logs contain the security events detected by IronSKY, with the following metadata:</p>
       <ul>
-        <li><b>Jenis event keamanan</b> — root/jailbreak detection, high-risk injection, MITM, domain fraud, dan lainnya.</li>
-        <li><b>Metadata device</b> — device UDID, OS version, dan device model.</li>
-        <li><b>Timestamp</b> — waktu kejadian event.</li>
+        <li><b>Security event type</b> — root/jailbreak detection, high-risk injection, MITM, domain fraud, and others.</li>
+        <li><b>Device metadata</b> — device UDID, OS version, and device model.</li>
+        <li><b>Timestamp</b> — the time the event occurred.</li>
       </ul>
     </section>
 
-    <section id="akses">
-      <h2>Akses dari SecIron</h2>
-      <p>SecIron menyediakan kredensial akses <b>read-only</b> ke bucket tempat log tenant Anda disimpan. Yang Anda terima:</p>
+    <section id="access">
+      <h2>Access from SecIron</h2>
+      <p>SecIron provides <b>read-only</b> access credentials to the bucket where your tenant's logs are stored. You receive:</p>
       <table>
-        <tr><th>Item</th><th>Nilai</th><th>Keterangan</th></tr>
-        <tr><td>Bucket</td><td><code>seciron-&lt;tenant&gt;-events</code></td><td>Wadah S3 penyimpanan log</td></tr>
+        <tr><th>Item</th><th>Value</th><th>Description</th></tr>
+        <tr><td>Bucket</td><td><code>seciron-&lt;tenant&gt;-events</code></td><td>S3 container for the logs</td></tr>
         <tr><td>Region</td><td><code>ap-southeast-3</code></td><td>AWS Asia Pacific (Jakarta)</td></tr>
-        <tr><td>Prefix</td><td><code>json_event/&lt;APP_ID&gt;/</code></td><td>Path log untuk aplikasi Anda</td></tr>
-        <tr><td>Access Key ID</td><td><code>AKIA…</code></td><td>Identitas akses program</td></tr>
-        <tr><td>Secret Access Key</td><td><code>&lt;rahasia&gt;</code></td><td>Kunci rahasia, jaga kerahasiaannya</td></tr>
+        <tr><td>Prefix</td><td><code>json_event/&lt;APP_ID&gt;/</code></td><td>Log path for your application</td></tr>
+        <tr><td>Access Key ID</td><td><code>AKIA…</code></td><td>Programmatic access identity</td></tr>
+        <tr><td>Secret Access Key</td><td><code>&lt;secret&gt;</code></td><td>Secret key; keep it confidential</td></tr>
       </table>
-      <p>Access Key ID dan Secret biasanya dikirim dalam satu file <code>accessKeys.csv</code>. Izin yang diberikan terbatas pada <code>s3:ListBucket</code> dan <code>s3:GetObject</code> pada prefix Anda, cukup untuk menarik log tanpa dapat mengubah isi bucket.</p>
-      <div class="note"><b>Catatan</b>Kredensial bersifat rahasia. Simpan pada lokasi terbatas (mis. <code>~/.aws/credentials</code> dengan permission <code>600</code>) dan jangan disertakan ke dalam repository atau dokumen yang dapat diakses publik.</div>
+      <p>The Access Key ID and Secret are usually delivered in a single <code>accessKeys.csv</code> file. The granted permissions are limited to <code>s3:ListBucket</code> and <code>s3:GetObject</code> on your prefix — enough to pull logs without being able to modify the bucket.</p>
+      <div class="note"><b>Note</b>Credentials are confidential. Store them in a restricted location (e.g. <code>~/.aws/credentials</code> with permission <code>600</code>) and never include them in a repository or a publicly accessible document.</div>
     </section>
 
     <section id="format">
-      <h2>Format &amp; Struktur Data</h2>
-      <p>Log disusun per aplikasi dan tanggal, dengan pola path:</p>
-      <div class="codeblock"><div class="cbar"><span class="fname">pola path di S3</span><button class="copy">Copy</button></div><pre>s3://&lt;bucket&gt;/json_event/&lt;APP_ID&gt;/&lt;TAHUN&gt;/&lt;BULAN&gt;/&lt;TANGGAL&gt;-event.json.gz
+      <h2>Data Format &amp; Structure</h2>
+      <p>Logs are organized by application and date, following this path pattern:</p>
+      <div class="codeblock"><div class="cbar"><span class="fname">S3 path pattern</span><button class="copy">Copy</button></div><pre>s3://&lt;bucket&gt;/json_event/&lt;APP_ID&gt;/&lt;YEAR&gt;/&lt;MONTH&gt;/&lt;DATE&gt;-event.json.gz
 
-contoh:
+example:
 s3://seciron-acme-events/json_event/1141/2026/09/2026-09-16-event.json.gz</pre></div>
-      <p>Setiap objek adalah satu hari log dalam format <b>NDJSON</b> (satu objek JSON per baris) yang dikompresi gzip. Contoh satu baris event:</p>
-      <div class="codeblock"><div class="cbar"><span class="fname">satu event (setelah dekompresi)</span><button class="copy">Copy</button></div><pre>{
+      <p>Each object is one day of logs in <b>NDJSON</b> format (one JSON object per line), gzip-compressed. Example of a single event line:</p>
+      <div class="codeblock"><div class="cbar"><span class="fname">one event (after decompression)</span><button class="copy">Copy</button></div><pre>{
   "udid": "1a2b3c4d-0000-0000-0000-999999999999",
   "app_id": "1141",
-  "app_name": "Contoh Bank App",
+  "app_name": "Sample Bank App",
   "Security event": "event_risk_root",
   "Response type": "Pop-up message with close pop-up",
   "Startup time": "2026-09-16 12:51:15.000",
@@ -152,18 +152,18 @@ s3://seciron-acme-events/json_event/1141/2026/09/2026-09-16-event.json.gz</pre><
   "Region": "Indonesia-Jakarta"
 }</pre></div>
       <table>
-        <tr><th>Field</th><th>Keterangan</th></tr>
-        <tr><td><code>Security event</code></td><td>Jenis ancaman yang terdeteksi (mis. <code>event_risk_root</code>, <code>event_high_risk_MITM_android</code>).</td></tr>
-        <tr><td><code>udid</code></td><td>Identitas unik perangkat.</td></tr>
-        <tr><td><code>Response type</code></td><td>Aksi RASP yang diambil (pop-up, monitoring, dll).</td></tr>
-        <tr><td><code>Startup time</code></td><td>Waktu kejadian event pada perangkat.</td></tr>
-        <tr><td><code>Model name</code> / <code>os_version</code> / <code>Region</code></td><td>Konteks perangkat dan lokasi.</td></tr>
+        <tr><th>Field</th><th>Description</th></tr>
+        <tr><td><code>Security event</code></td><td>Detected threat type (e.g. <code>event_risk_root</code>, <code>event_high_risk_MITM_android</code>).</td></tr>
+        <tr><td><code>udid</code></td><td>Unique device identifier.</td></tr>
+        <tr><td><code>Response type</code></td><td>RASP action taken (pop-up, monitoring, etc.).</td></tr>
+        <tr><td><code>Startup time</code></td><td>Event occurrence time on the device.</td></tr>
+        <tr><td><code>Model name</code> / <code>os_version</code> / <code>Region</code></td><td>Device and location context.</td></tr>
       </table>
     </section>
 
     <section id="s1">
-      <h2>1. Menyiapkan Kredensial</h2>
-      <p>Simpan kredensial sebagai profil AWS CLI bernama <code>ironsky</code>. Jalankan di host yang akan melakukan pulling (server SIEM atau host forwarder).</p>
+      <h2>1. Prepare Credentials</h2>
+      <p>Store the credentials as an AWS CLI profile named <code>ironsky</code>. Run this on the host that will perform the pulling (the SIEM server or a forwarder host).</p>
       <div class="codeblock"><div class="cbar"><span class="fname">~/.aws/credentials</span><button class="copy">Copy</button></div><pre>mkdir -p ~/.aws &amp;&amp; chmod 700 ~/.aws
 cat &gt;&gt; ~/.aws/credentials &lt;&lt;'EOF'
 [ironsky]
@@ -174,33 +174,33 @@ chmod 600 ~/.aws/credentials</pre></div>
     </section>
 
     <section id="s2">
-      <h2>2. AWS CLI &amp; Tes Akses</h2>
-      <div class="codeblock"><div class="cbar"><span class="fname">install &amp; set region</span><button class="copy">Copy</button></div><pre>sudo apt install -y awscli            <span class="cmt"># atau brew install awscli / yum install awscli</span>
+      <h2>2. AWS CLI &amp; Access Test</h2>
+      <div class="codeblock"><div class="cbar"><span class="fname">install &amp; set region</span><button class="copy">Copy</button></div><pre>sudo apt install -y awscli            <span class="cmt"># or brew install awscli / yum install awscli</span>
 aws configure set region ap-southeast-3 --profile ironsky</pre></div>
-      <div class="codeblock"><div class="cbar"><span class="fname">verifikasi akses</span><button class="copy">Copy</button></div><pre>aws sts get-caller-identity --profile ironsky
+      <div class="codeblock"><div class="cbar"><span class="fname">verify access</span><button class="copy">Copy</button></div><pre>aws sts get-caller-identity --profile ironsky
 aws s3 ls s3://&lt;bucket&gt;/json_event/&lt;APP_ID&gt;/ --recursive --profile ironsky | tail</pre></div>
-      <p>Bila daftar file muncul, akses sudah benar. Jalankan tes ini dari host yang sama yang akan menjalankan pulling, agar konektivitas dan aturan jaringan host ikut tervalidasi.</p>
+      <p>If the file listing appears, access is working. Run this test from the same host that will perform the pulling, so the host's connectivity and network rules are validated too.</p>
     </section>
 
     <section id="s3">
-      <h2>3. Pull Log dari Bucket</h2>
-      <p><code>aws s3 sync</code> hanya mengunduh objek yang belum ada secara lokal, sehingga aman dijalankan berkala.</p>
-      <div class="codeblock"><div class="cbar"><span class="fname">sync ke folder lokal</span><button class="copy">Copy</button></div><pre>mkdir -p /opt/ironsky/raw
+      <h2>3. Pull Logs from the Bucket</h2>
+      <p><code>aws s3 sync</code> only downloads objects not already present locally, so it is safe to run repeatedly.</p>
+      <div class="codeblock"><div class="cbar"><span class="fname">sync to a local folder</span><button class="copy">Copy</button></div><pre>mkdir -p /opt/ironsky/raw
 aws s3 sync s3://&lt;bucket&gt;/json_event/&lt;APP_ID&gt;/ /opt/ironsky/raw/ \
   --profile ironsky --region ap-southeast-3 \
   --exclude "*" --include "*.json.gz" --include "*.tar.gz"</pre></div>
     </section>
 
     <section id="s4">
-      <h2>4. Ekstrak &amp; Rapikan</h2>
-      <p>Buka arsip untuk mendapatkan NDJSON. Objek terbaru berformat <code>.json.gz</code>, sedangkan arsip historis dapat berupa <code>.tar.gz</code>, tangani keduanya. Karena beberapa nama field mengandung spasi (mis. <code>Security event</code>), normalkan menjadi <code>snake_case</code> agar mudah dibuatkan rule di SIEM.</p>
-      <div class="codeblock"><div class="cbar"><span class="fname">dekompresi + normalisasi ke events.jsonl</span><button class="copy">Copy</button></div><pre>mkdir -p /opt/ironsky/out
-<span class="cmt"># .json.gz  -> NDJSON langsung</span>
+      <h2>4. Extract &amp; Normalize</h2>
+      <p>Decompress the archives to obtain NDJSON. Recent objects are <code>.json.gz</code>, while historical archives may be <code>.tar.gz</code> — handle both. Because some field names contain spaces (e.g. <code>Security event</code>), normalize them to <code>snake_case</code> so they are easy to write SIEM rules against.</p>
+      <div class="codeblock"><div class="cbar"><span class="fname">decompress + normalize into events.jsonl</span><button class="copy">Copy</button></div><pre>mkdir -p /opt/ironsky/out
+<span class="cmt"># .json.gz  -> NDJSON directly</span>
 gunzip -c /opt/ironsky/raw/2026/09/*.json.gz \
   | python3 normalize.py &gt;&gt; /opt/ironsky/out/events.jsonl
-<span class="cmt"># .tar.gz (arsip lama) -> keluarkan anggota ke stdout</span>
+<span class="cmt"># .tar.gz (older archives) -> stream members to stdout</span>
 <span class="cmt"># tar -xzOf /opt/ironsky/raw/2026/01/2026-01-25-event.tar.gz | python3 normalize.py &gt;&gt; /opt/ironsky/out/events.jsonl</span></pre></div>
-      <p>Skrip normalisasi, simpan sebagai <code>/opt/ironsky/normalize.py</code> (dipakai juga oleh <code>pull.sh</code> pada langkah 6):</p>
+      <p>Normalization script — save it as <code>/opt/ironsky/normalize.py</code> (also used by <code>pull.sh</code> in step 6):</p>
       <div class="codeblock"><div class="cbar"><span class="fname">/opt/ironsky/normalize.py</span><button class="copy">Copy</button></div><pre>import sys, json, re
 for line in sys.stdin:
     line = line.strip()
@@ -212,21 +212,21 @@ for line in sys.stdin:
     </section>
 
     <section id="s5">
-      <h2>5. Alirkan ke SIEM</h2>
-      <p>Arahkan SIEM untuk membaca <code>events.jsonl</code> sebagai log JSON. Contoh untuk Wazuh:</p>
+      <h2>5. Forward to SIEM</h2>
+      <p>Point your SIEM to read <code>events.jsonl</code> as JSON logs. Example for Wazuh:</p>
       <div class="codeblock"><div class="cbar"><span class="fname">/var/ossec/etc/ossec.conf</span><button class="copy">Copy</button></div><pre>&lt;localfile&gt;
   &lt;log_format&gt;json&lt;/log_format&gt;
   &lt;location&gt;/opt/ironsky/out/events.jsonl&lt;/location&gt;
 &lt;/localfile&gt;</pre></div>
       <table>
-        <tr><th>SIEM</th><th>Mekanisme ingest</th></tr>
-        <tr><td>Wazuh</td><td><code>&lt;localfile&gt;</code> dengan <code>log_format json</code></td></tr>
-        <tr><td>Splunk</td><td>Universal Forwarder <code>monitor</code>, atau Add-on for AWS (S3 input)</td></tr>
-        <tr><td>Elastic</td><td>Filebeat filestream + ndjson parser, atau S3 input</td></tr>
-        <tr><td>IBM QRadar / ArcSight</td><td>Log source / connector membaca file JSON</td></tr>
+        <tr><th>SIEM</th><th>Ingest mechanism</th></tr>
+        <tr><td>Wazuh</td><td><code>&lt;localfile&gt;</code> with <code>log_format json</code></td></tr>
+        <tr><td>Splunk</td><td>Universal Forwarder <code>monitor</code>, or Add-on for AWS (S3 input)</td></tr>
+        <tr><td>Elastic</td><td>Filebeat filestream + ndjson parser, or S3 input</td></tr>
+        <tr><td>IBM QRadar / ArcSight</td><td>Log source / connector reading the JSON file</td></tr>
       </table>
-      <p>Setelah event masuk, buat rule/korelasi pada SIEM untuk memberi tingkat keparahan per jenis <code>security_event</code>. Contoh rule Wazuh:</p>
-      <div class="codeblock"><div class="cbar"><span class="fname">/var/ossec/etc/rules/ (contoh)</span><button class="copy">Copy</button></div><pre>&lt;group name="ironsky,"&gt;
+      <p>Once events are ingested, create rules/correlation in the SIEM to assign a severity per <code>security_event</code> type. Example Wazuh rule:</p>
+      <div class="codeblock"><div class="cbar"><span class="fname">/var/ossec/etc/rules/ (example)</span><button class="copy">Copy</button></div><pre>&lt;group name="ironsky,"&gt;
   &lt;rule id="100106" level="12"&gt;
     &lt;decoded_as&gt;json&lt;/decoded_as&gt;
     &lt;field name="ironsky.security_event"&gt;event_risk_root&lt;/field&gt;
@@ -237,8 +237,8 @@ for line in sys.stdin:
     </section>
 
     <section id="s6">
-      <h2>6. Penjadwalan</h2>
-      <p>Gabungkan langkah pull dan ekstrak ke dalam satu skrip yang idempotent (tidak memproses ulang file yang sudah diproses), lalu jadwalkan. Karena data bersifat H+1, interval 30-60 menit sudah memadai.</p>
+      <h2>6. Scheduling</h2>
+      <p>Combine the pull and extract steps into a single <b>idempotent</b> script (one that does not reprocess files already handled), then schedule it. Because data is T+1, a 30-60 minute interval is sufficient.</p>
       <div class="codeblock"><div class="cbar"><span class="fname">/opt/ironsky/pull.sh</span><button class="copy">Copy</button></div><pre>#!/usr/bin/env bash
 set -euo pipefail
 BUCKET="&lt;bucket&gt;"; APP="&lt;APP_ID&gt;"; REGION="ap-southeast-3"; PROFILE="ironsky"
@@ -255,43 +255,43 @@ extract(){ case "$1" in *.json.gz) gunzip -c "$1";; *.tar.gz) tar -xzOf "$1";; e
 
 while IFS= read -r -d '' f; do
   key="${f#"$RAW"/}"
-  grep -qxF "$key" "$STATE" &amp;&amp; continue          <span class="cmt"># sudah diproses -> lewati</span>
+  grep -qxF "$key" "$STATE" &amp;&amp; continue          <span class="cmt"># already processed -> skip</span>
   extract "$f" | python3 "$NORM" &gt;&gt; "$OUT"
   echo "$key" &gt;&gt; "$STATE"
 done &lt; &lt;(find "$RAW" -type f \( -name '*.json.gz' -o -name '*.tar.gz' \) -print0 | sort -z)</pre></div>
       <div class="codeblock"><div class="cbar"><span class="fname">cron</span><button class="copy">Copy</button></div><pre>*/30 * * * * /opt/ironsky/pull.sh &gt;&gt; /var/log/ironsky-pull.log 2&gt;&amp;1</pre></div>
-      <div class="note"><b>Catatan</b>File <code>events.jsonl</code> bertambah setiap hari. Terapkan rotasi (mis. <code>logrotate</code> dengan <code>copytruncate</code>) agar penggunaan disk terkendali dan proses tailing SIEM tidak terputus.</div>
+      <div class="note"><b>Note</b>The <code>events.jsonl</code> file grows every day. Apply rotation (e.g. <code>logrotate</code> with <code>copytruncate</code>) so disk usage stays under control and the SIEM's tailing is not interrupted.</div>
     </section>
 
-    <section id="verifikasi">
-      <h2>Verifikasi</h2>
+    <section id="verification">
+      <h2>Verification</h2>
       <ol>
-        <li>Pastikan objek terunduh: <code>ls -R /opt/ironsky/raw | tail</code>.</li>
-        <li>Pastikan <code>events.jsonl</code> bertambah: <code>wc -l /opt/ironsky/out/events.jsonl</code>.</li>
-        <li>Pastikan SIEM menampilkan event, mis. pada Wazuh cek <code>/var/ossec/logs/alerts/alerts.json</code> atau dashboard.</li>
+        <li>Confirm objects were downloaded: <code>ls -R /opt/ironsky/raw | tail</code>.</li>
+        <li>Confirm <code>events.jsonl</code> is growing: <code>wc -l /opt/ironsky/out/events.jsonl</code>.</li>
+        <li>Confirm the SIEM shows events, e.g. on Wazuh check <code>/var/ossec/logs/alerts/alerts.json</code> or the dashboard.</li>
       </ol>
     </section>
 
     <section id="troubleshoot">
       <h2>Troubleshooting</h2>
       <table>
-        <tr><th>Gejala</th><th>Penyebab &amp; solusi</th></tr>
-        <tr><td><code>AccessDenied</code></td><td>Nama bucket atau prefix keliru. Pastikan sesuai APP_ID Anda.</td></tr>
-        <tr><td><code>InvalidAccessKeyId</code> / <code>SignatureDoesNotMatch</code></td><td>Salah salin Access Key/Secret. Salin ulang dari <code>accessKeys.csv</code>.</td></tr>
-        <tr><td>Tidak ada file untuk hari ini</td><td>Perilaku normal (H+1). Log tanggal kemarin tersedia pada hari berikutnya.</td></tr>
-        <tr><td>Event ganda di SIEM</td><td>Skrip memproses ulang file lama. Catat file yang sudah diproses agar idempotent.</td></tr>
+        <tr><th>Symptom</th><th>Cause &amp; fix</th></tr>
+        <tr><td><code>AccessDenied</code></td><td>Wrong bucket name or prefix. Make sure it matches your APP_ID.</td></tr>
+        <tr><td><code>InvalidAccessKeyId</code> / <code>SignatureDoesNotMatch</code></td><td>Access Key/Secret copied incorrectly. Re-copy from <code>accessKeys.csv</code>.</td></tr>
+        <tr><td>No file for today</td><td>Normal behavior (T+1). Yesterday's logs become available the next day.</td></tr>
+        <tr><td>Duplicate events in the SIEM</td><td>The script is reprocessing old files. Record processed files to stay idempotent.</td></tr>
       </table>
     </section>
 
     <div class="foot">
-      IronSKY — SIEM/External System Integration. Nilai bucket, APP_ID, dan kredensial pada halaman ini adalah contoh; gunakan nilai aktual dari SecIron. Region: ap-southeast-3 (Jakarta).
+      IronSKY — SIEM/External System Integration. The bucket, APP_ID, and credential values on this page are examples; use the actual values from SecIron. Region: ap-southeast-3 (Jakarta).
     </div>
   </main>
 </div>
 <script>
   document.querySelectorAll('.codeblock').forEach(function(cb){
     var btn=cb.querySelector('.copy'),pre=cb.querySelector('pre'); if(!btn||!pre)return;
-    btn.addEventListener('click',function(){navigator.clipboard.writeText(pre.innerText).then(function(){var t=btn.textContent;btn.textContent='Tersalin';setTimeout(function(){btn.textContent=t},1400)})});
+    btn.addEventListener('click',function(){navigator.clipboard.writeText(pre.innerText).then(function(){var t=btn.textContent;btn.textContent='Copied';setTimeout(function(){btn.textContent=t},1400)})});
   });
   var links=[].slice.call(document.querySelectorAll('.nav a')),secs=links.map(function(a){return document.querySelector(a.getAttribute('href'))});
   function spy(){var y=scrollY+120,i=0;for(var k=0;k<secs.length;k++){if(secs[k]&&secs[k].offsetTop<=y)i=k}links.forEach(function(a){a.classList.remove('active')});if(links[i])links[i].classList.add('active')}

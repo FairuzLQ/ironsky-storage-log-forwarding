@@ -86,7 +86,7 @@
 
     <section id="ringkasan">
       <h2>Ringkasan</h2>
-      <p>Fitur ini memungkinkan seluruh aktivitas anomali atau potensi ancaman dari sisi aplikasi mobile terpantau secara terpusat di dashboard SIEM. IronSKY mengirim log event keamanan ke sebuah bucket storage; sistem SIEM kemudian mem-pull log tersebut secara periodik untuk dianalisis dan dikorelasikan.</p>
+      <p>Dengan metode ini, aktivitas anomali dan potensi ancaman dari sisi aplikasi mobile dapat terpantau terpusat di dashboard SIEM, serta dianalisis dan dikorelasikan bersama sumber log lain di perusahaan.</p>
       <p>Metode ini mendukung arsitektur <b>storage-based log forwarding</b> yang fleksibel dan kompatibel dengan berbagai platform SIEM (Splunk, IBM QRadar, ArcSight, Wazuh, dan lainnya). Karena mekanisme pengiriman berbasis storage, terdapat jeda ketersediaan data sebesar <b>H+1</b>: log aktivitas dari tanggal tertentu baru tersedia untuk di-pull pada hari berikutnya.</p>
     </section>
 
@@ -188,15 +188,18 @@ aws s3 ls s3://&lt;bucket&gt;/json_event/&lt;APP_ID&gt;/ --recursive --profile i
       <div class="codeblock"><div class="cbar"><span class="fname">sync ke folder lokal</span><button class="copy">Copy</button></div><pre>mkdir -p /opt/ironsky/raw
 aws s3 sync s3://&lt;bucket&gt;/json_event/&lt;APP_ID&gt;/ /opt/ironsky/raw/ \
   --profile ironsky --region ap-southeast-3 \
-  --exclude "*" --include "*.json.gz"</pre></div>
+  --exclude "*" --include "*.json.gz" --include "*.tar.gz"</pre></div>
     </section>
 
     <section id="s4">
       <h2>4. Ekstrak &amp; Rapikan</h2>
-      <p>Buka gzip untuk mendapatkan NDJSON. Karena beberapa nama field mengandung spasi (mis. <code>Security event</code>), disarankan menormalkannya menjadi <code>snake_case</code> agar mudah dibuatkan rule di SIEM.</p>
+      <p>Buka arsip untuk mendapatkan NDJSON. Objek terbaru berformat <code>.json.gz</code>, sedangkan arsip historis dapat berupa <code>.tar.gz</code>, tangani keduanya. Karena beberapa nama field mengandung spasi (mis. <code>Security event</code>), normalkan menjadi <code>snake_case</code> agar mudah dibuatkan rule di SIEM.</p>
       <div class="codeblock"><div class="cbar"><span class="fname">dekompresi + normalisasi ke events.jsonl</span><button class="copy">Copy</button></div><pre>mkdir -p /opt/ironsky/out
-gunzip -c /opt/ironsky/raw/&lt;APP_ID&gt;/2026/09/*.json.gz \
-  | python3 normalize.py &gt;&gt; /opt/ironsky/out/events.jsonl</pre></div>
+<span class="cmt"># .json.gz  -> NDJSON langsung</span>
+gunzip -c /opt/ironsky/raw/2026/09/*.json.gz \
+  | python3 normalize.py &gt;&gt; /opt/ironsky/out/events.jsonl
+<span class="cmt"># .tar.gz (arsip lama) -> keluarkan anggota ke stdout</span>
+<span class="cmt"># tar -xzOf /opt/ironsky/raw/2026/01/2026-01-25-event.tar.gz | python3 normalize.py &gt;&gt; /opt/ironsky/out/events.jsonl</span></pre></div>
       <div class="codeblock"><div class="cbar"><span class="fname">normalize.py</span><button class="copy">Copy</button></div><pre>import sys, json, re
 for line in sys.stdin:
     line = line.strip()
@@ -221,12 +224,40 @@ for line in sys.stdin:
         <tr><td>Elastic</td><td>Filebeat filestream + ndjson parser, atau S3 input</td></tr>
         <tr><td>IBM QRadar / ArcSight</td><td>Log source / connector membaca file JSON</td></tr>
       </table>
-      <p>Setelah event masuk, buat rule/korelasi pada SIEM untuk memberi tingkat keparahan per jenis <code>security_event</code> (root, injection, MITM, dan seterusnya).</p>
+      <p>Setelah event masuk, buat rule/korelasi pada SIEM untuk memberi tingkat keparahan per jenis <code>security_event</code>. Contoh rule Wazuh:</p>
+      <div class="codeblock"><div class="cbar"><span class="fname">/var/ossec/etc/rules/ (contoh)</span><button class="copy">Copy</button></div><pre>&lt;group name="ironsky,"&gt;
+  &lt;rule id="100106" level="12"&gt;
+    &lt;decoded_as&gt;json&lt;/decoded_as&gt;
+    &lt;field name="ironsky.security_event"&gt;event_risk_root&lt;/field&gt;
+    &lt;description&gt;IronSKY: rooted device ($(ironsky.udid))&lt;/description&gt;
+    &lt;group&gt;rooting,&lt;/group&gt;
+  &lt;/rule&gt;
+&lt;/group&gt;</pre></div>
     </section>
 
     <section id="s6">
       <h2>6. Penjadwalan</h2>
-      <p>Gabungkan langkah pull dan ekstrak ke dalam satu skrip, lalu jadwalkan. Karena data bersifat H+1, interval 30-60 menit sudah memadai untuk mengambil arsip harian segera setelah tersedia.</p>
+      <p>Gabungkan langkah pull dan ekstrak ke dalam satu skrip yang idempotent (tidak memproses ulang file yang sudah diproses), lalu jadwalkan. Karena data bersifat H+1, interval 30-60 menit sudah memadai.</p>
+      <div class="codeblock"><div class="cbar"><span class="fname">/opt/ironsky/pull.sh</span><button class="copy">Copy</button></div><pre>#!/usr/bin/env bash
+set -euo pipefail
+BUCKET="&lt;bucket&gt;"; APP="&lt;APP_ID&gt;"; REGION="ap-southeast-3"; PROFILE="ironsky"
+RAW=/opt/ironsky/raw; OUT=/opt/ironsky/out/events.jsonl
+STATE=/opt/ironsky/processed.list; NORM=/opt/ironsky/normalize.py
+export AWS_PAGER=""
+mkdir -p "$RAW" "$(dirname "$OUT")"; touch "$STATE" "$OUT"
+
+aws s3 sync "s3://$BUCKET/json_event/$APP/" "$RAW/" \
+  --profile "$PROFILE" --region "$REGION" \
+  --exclude "*" --include "*.json.gz" --include "*.tar.gz" --only-show-errors
+
+extract(){ case "$1" in *.json.gz) gunzip -c "$1";; *.tar.gz) tar -xzOf "$1";; esac; }
+
+while IFS= read -r -d '' f; do
+  key="${f#"$RAW"/}"
+  grep -qxF "$key" "$STATE" &amp;&amp; continue          <span class="cmt"># sudah diproses -> lewati</span>
+  extract "$f" | python3 "$NORM" &gt;&gt; "$OUT"
+  echo "$key" &gt;&gt; "$STATE"
+done &lt; &lt;(find "$RAW" -type f \( -name '*.json.gz' -o -name '*.tar.gz' \) -print0 | sort -z)</pre></div>
       <div class="codeblock"><div class="cbar"><span class="fname">cron</span><button class="copy">Copy</button></div><pre>*/30 * * * * /opt/ironsky/pull.sh &gt;&gt; /var/log/ironsky-pull.log 2&gt;&amp;1</pre></div>
       <div class="note"><b>Catatan</b>File <code>events.jsonl</code> bertambah setiap hari. Terapkan rotasi (mis. <code>logrotate</code> dengan <code>copytruncate</code>) agar penggunaan disk terkendali dan proses tailing SIEM tidak terputus.</div>
     </section>
